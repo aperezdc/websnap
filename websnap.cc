@@ -29,7 +29,7 @@ WebSnap::WebSnap(QWebPage& page):
             SLOT(onLoadProgress(int)),
             Qt::UniqueConnection);
 
-    connect(&_page,
+    connect(_page.mainFrame(),
             SIGNAL(initialLayoutCompleted()),
             SLOT(onInitialLayoutCompleted()),
             Qt::UniqueConnection);
@@ -64,6 +64,8 @@ void
 WebSnap::onInitialLayoutCompleted()
 {
     std::fprintf(stderr, "Layout completed\n");
+    _layoutCompleted = true;
+
     if (_loadCompleted && _layoutCompleted)
         emit ready();
 }

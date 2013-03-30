@@ -11,7 +11,7 @@
 #include <QUrl>
 #include <cstdio>
 #include "websnap.h"
-
+#include "perf.h"
 
 
 int
@@ -26,6 +26,9 @@ main(int argc, char *argv[])
     std::fprintf(stderr, "Loading %s\n", qPrintable(url.toString()));
 
     WebSnap snap(page);
+    Perf perf(snap,
+              (argc > 2) ? strtoul(argv[2], NULL, 0) : 1,
+              (argc > 3) ? QString(argv[3]) : QString::null);
 
     page.mainFrame()->setScrollBarPolicy(Qt::Horizontal, Qt::ScrollBarAlwaysOff);
     page.mainFrame()->setScrollBarPolicy(Qt::Vertical, Qt::ScrollBarAlwaysOff);

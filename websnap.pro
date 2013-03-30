@@ -12,5 +12,5 @@ OBJECTS_DIR  = .vitunpaska
 MOC_DIR      = .vitunpaska
 
 # Input
-HEADERS += websnap.h clock.h
-SOURCES += websnap.cc main.cc clock.cc
+HEADERS += websnap.h clock.h perf.h
+SOURCES += websnap.cc main.cc clock.cc perf.cc
