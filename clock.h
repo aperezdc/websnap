@@ -29,14 +29,6 @@ public:
     // Reset the time counter, e.g. set the “starting time”
     void reset();
 
-    // Obtain the resolution of the timer, ns
-    static uint64_t resolution();
-
-    // Whether the timer is supported in the platform. If the timer is not
-    // supported, calling reset(), sample() and elapsed() will work but the
-    // numbers will not be meaningful and warnings will be prited to stderr.
-    static bool supported();
-
     // Helper class to use RAII to measure a code block, use it like this:
     //
     //   Clock clk;

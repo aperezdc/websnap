@@ -12,15 +12,91 @@
 #include "clock.h"
 #include <cstring>
 #include <cerrno>
+#include <cassert>
 #include <cstdio>
-
-namespace posix_rt {
 #include <time.h>
-};
-
-namespace posix {
 #include <unistd.h>
-};
+
+
+//
+// If the claimed POSIX clock resolution and the measured one exceed
+// MAX_RESOLUTION_DELTA then it will be assumed that the clock source
+// is not reliable and the standard clock() function will be used.
+//
+#define CLOCK_MAX_RESOLUTION_DELTA  10000
+
+
+static uint64_t
+posixClockTheoricalResolution()
+{
+    struct timespec tv;
+    if (clock_getres(CLOCK_PROCESS_CPUTIME_ID, &tv) == -1)
+        return (uint64_t) -1;
+    return (tv.tv_sec * 1000 * 1000 * 1000) + tv.tv_nsec;
+}
+
+
+static bool
+posixClockAvailable()
+{
+    return posixClockTheoricalResolution() != (uint64_t) -1;
+}
+
+
+static inline uint64_t
+posixClockEmpiricalResolution()
+{
+    struct timespec tv;
+    uint64_t start;
+    uint64_t now;
+
+    if (clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &tv) == -1) {
+        assert(false);
+    }
+    start = (tv.tv_sec * 1000 * 1000 * 1000) + tv.tv_nsec;
+
+    do {
+        if (clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &tv) == -1)
+            assert(false);
+        now = (tv.tv_sec * 1000 * 1000 * 1000) + tv.tv_nsec;
+    } while (start >= now);
+
+    return (now - start);
+}
+
+
+bool usePosixClock()
+{
+    static bool checked = false;
+    static bool useposix;
+
+    if (!checked) {
+        if (posixClockAvailable()) {
+            uint64_t res_theorical = posixClockTheoricalResolution();
+            uint64_t res_empirical = posixClockEmpiricalResolution();
+            uint64_t delta = (res_theorical > res_empirical)
+                           ? (res_theorical - res_empirical)
+                           : (res_empirical - res_theorical);
+
+            if (delta > CLOCK_MAX_RESOLUTION_DELTA) {
+                std::fprintf(stderr,
+                             "CLOCK_PROCESS_CPUTIME_ID does not work accurately, "
+                             "using fallback\n");
+                useposix = false;
+            }
+            else {
+                useposix = true;
+            }
+        }
+        else {
+            std::fprintf(stderr,
+                         "CLOCK_PROCESS_CPUTIME_ID not available, using fallback\n");
+            useposix = false;
+        }
+        checked = true;
+    }
+    return useposix;
+}
 
 
 Clock::Clock(bool autoReset):
@@ -34,62 +110,54 @@ Clock::Clock(bool autoReset):
 
 void Clock::reset()
 {
-    struct posix_rt::timespec tv;
-
-    if (posix_rt::clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &tv) == -1)
-        std::fprintf(stderr, "Clock::reset(): %s\n", std::strerror(errno));
-
-    _start = (tv.tv_sec * 1000 * 1000 * 1000) + tv.tv_nsec;
+    if (usePosixClock()) {
+        struct timespec tv;
+        if (clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &tv) == -1)
+            assert(false);
+        _start = (tv.tv_sec * 1000 * 1000 * 1000) + tv.tv_nsec;
+    }
+    else {
+        _start = clock() * 1000 * 1000 * 1000 / CLOCKS_PER_SEC;
+    }
 }
 
 
 uint64_t Clock::sample()
 {
-    struct posix_rt::timespec tv;
-
-    if (posix_rt::clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &tv) == -1)
-        std::fprintf(stderr, "Clock::reset(): %s\n", std::strerror(errno));
-
-    _end = (tv.tv_sec * 1000 * 1000 * 1000) + tv.tv_nsec;
+    if (usePosixClock()) {
+        struct timespec tv;
+        if (clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &tv) == -1)
+            assert(false);
+        _end = (tv.tv_sec * 1000 * 1000 * 1000) + tv.tv_nsec;
+    }
+    else {
+        _end = clock() * 1000 * 1000 * 1000 / CLOCKS_PER_SEC;
+    }
     return elapsed();
-}
-
-
-uint64_t Clock::resolution()
-{
-    struct posix_rt::timespec tv;
-
-    if (posix_rt::clock_getres(CLOCK_PROCESS_CPUTIME_ID, &tv) == -1)
-        return (uint64_t) -1;
-    return (tv.tv_sec * 1000 * 1000 * 1000) + tv.tv_nsec;
-}
-
-
-bool Clock::supported()
-{
-    return resolution() != (uint64_t) -1;
 }
 
 
 #ifdef MAIN
 int main(int argc, char *argv[])
 {
-    if (Clock::supported()) {
-        Clock process_time;
-        Clock resolution;
-
-        while (resolution.sample() == 0) /* nothing */;
-
+    Clock process_time;
+    if (posixClockAvailable()) {
         std::printf("CLOCK_PROCESS_CPUTIME_ID is supported\n");
         std::printf("Resolution (advertised/empirical): %lu/%luns\n",
-                    (unsigned long) Clock::resolution(),
-                    (unsigned long) resolution.elapsed());
-        std::printf("Printing the two lines above took %luns\n",
-                    (unsigned long) process_time.sample());
+                    (unsigned long) posixClockTheoricalResolution(),
+                    (unsigned long) posixClockEmpiricalResolution());
     }
     else {
         std::printf("CLOCK_PROCESS_CPUTIME_ID is NOT supported\n");
     }
+
+    Clock resolution;
+    while (!resolution.sample()) /* nothing */ ;
+
+    std::printf("Sampled resolution: %luns\n",
+                (unsigned long) resolution.elapsed());
+    std::printf("Printing the lines above took %luns\n",
+                (unsigned long) process_time.sample());
 }
 #endif // MAIN
 
