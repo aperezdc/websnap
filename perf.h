@@ -22,9 +22,13 @@ private:
     WebSnap& _snap;
     uint     _times;
     QString  _output;
+    QString  _pngPath;
 
 public:
-    Perf(WebSnap& snap, uint times = 1, QString output = QString::null);
+    Perf(WebSnap& snap,
+         uint times = 1,
+         const QString output = QString::null,
+         const QString pngPath = QString::null);
 
 public Q_SLOTS:
     void run();

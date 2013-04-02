@@ -7,17 +7,19 @@
 
 #include "perf.h"
 #include "websnap.h"
+#include "gcpuprofiler.h"
 #include "clock.h"
 #include <cstdio>
 #include <QApplication>
 #include <QWebFrame>
 
 
-Perf::Perf(WebSnap& snap, uint times, QString output):
+Perf::Perf(WebSnap& snap, uint times, const QString output, const QString pngPath):
     QObject(),
     _snap(snap),
     _times(times),
-    _output(output)
+    _output(output),
+    _pngPath(pngPath)
 {
     connect(&_snap, SIGNAL(ready()), SLOT(run()), Qt::UniqueConnection);
 }
@@ -26,18 +28,28 @@ Perf::Perf(WebSnap& snap, uint times, QString output):
 void Perf::run()
 {
     Clock clk;
+    GCpuProfiler *profiler = (_output.isEmpty()) ? 0 : new GCpuProfiler(_output.toAscii());
+
+    if (profiler)
+        profiler->start();
+
     for (uint i = 0; i < _times; i++)
         _snap.render();
+
     clk.sample();
+    if (profiler)
+        profiler->stop();
+
 
     std::printf("%s %u %lu\n",
                 qPrintable(_snap.page().mainFrame()->url().toString()),
                 _times,
                 (unsigned long) (clk.elapsed() / 1000 / 1000));
 
-    if (!_output.isEmpty())
-        _snap.render(_output);
+    if (!_pngPath.isEmpty())
+        _snap.render(_pngPath);
 
+    delete profiler;
     QApplication::exit();
 }
 

@@ -35,7 +35,8 @@ main(int argc, char *argv[])
     QUrl url(QUrl::fromUserInput((argc > 1) ? argv[1] : "http://igalia.com"));
     Perf perf(snap,
               (argc > 2) ? strtoul(argv[2], NULL, 0) : 1,
-              (argc > 3) ? QString(argv[3]) : QString::null);
+              (argc > 3) ? QString(argv[3]) : QString::null,
+              (argc > 4) ? QString(argv[4]) : QString::null);
 
     page.mainFrame()->setScrollBarPolicy(Qt::Horizontal, Qt::ScrollBarAlwaysOff);
     page.mainFrame()->setScrollBarPolicy(Qt::Vertical, Qt::ScrollBarAlwaysOff);
