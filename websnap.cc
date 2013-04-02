@@ -5,12 +5,33 @@
  * Distributed under terms of the MIT license.
  */
 
+#ifndef _POSIX_SOURCE
+#define _POSIX_SOURCE 1
+#endif // !_POSIX_SOURCE
+
 #include <QApplication>
 #include <QWebFrame>
 #include <QPainter>
 #include <QImage>
 #include <cstdio>
+#include <cstdarg>
+#include <unistd.h>
 #include "websnap.h"
+
+
+static void
+reportProgress(const char* fmt, ...)
+{
+    static bool print_progress = ::isatty(::fileno(stderr));
+    va_list args;
+
+    va_start(args, fmt);
+    if (print_progress) {
+        vfprintf(stderr, fmt, args);
+        fflush(stderr);
+    }
+    va_end(args);
+}
 
 
 WebSnap::WebSnap(QWebPage& page):
@@ -19,6 +40,8 @@ WebSnap::WebSnap(QWebPage& page):
     _layoutCompleted(false),
     _loadCompleted(false)
 {
+    _page.setViewportSize(QSize(800, 600));
+
     connect(&_page,
             SIGNAL(loadFinished(bool)),
             SLOT(onLoadFinished(bool)),
@@ -39,13 +62,13 @@ WebSnap::WebSnap(QWebPage& page):
 void
 WebSnap::onLoadFinished(bool ok)
 {
-    std::fprintf(stderr, "Page loading %s\n", ok ? "succeeded" : "failed");
     _loadCompleted = true;
-
     if (!ok) {
+        reportProgress("Load failed\n");
         QApplication::exit(1);
     }
     else {
+        reportProgress("Load successful\n");
         if (_loadCompleted && _layoutCompleted)
             emit ready();
     }
@@ -54,18 +77,16 @@ WebSnap::onLoadFinished(bool ok)
 void
 WebSnap::onLoadProgress(int progress)
 {
-    std::fprintf(stderr, "\rLoading %i%%", progress);
+    reportProgress("\rLoading %i%% ", progress);
     if (progress > 99)
-        std::fputc('\n', stderr);
-    std::fflush(stderr);
+        reportProgress("\n");
 }
 
 void
 WebSnap::onInitialLayoutCompleted()
 {
-    std::fprintf(stderr, "Layout completed\n");
     _layoutCompleted = true;
-
+    reportProgress("Layout completed");
     if (_loadCompleted && _layoutCompleted)
         emit ready();
 }
@@ -74,13 +95,19 @@ WebSnap::onInitialLayoutCompleted()
 void
 WebSnap::render(const QString& path)
 {
-    _page.setViewportSize(_page.mainFrame()->contentsSize());
+    const QSize size(_page.mainFrame()->contentsSize());
 
-    QPainter painter;
-    QImage image(_page.viewportSize(), QImage::Format_ARGB32);
-    painter.begin(&image);
+    if (!size.width() || !size.height()) {
+        std::fprintf(stderr, "Size is zero (%ux%u)\n",
+                     size.width(), size.height());
+        QApplication::exit(2);
+    }
+
+    _page.setViewportSize(size);
+    QImage image(size, QImage::Format_RGB32);
+
+    QPainter painter(&image);
     _page.mainFrame()->render(&painter);
-    painter.end();
 
     if (!path.isEmpty())
         image.save(path, "png");
