@@ -39,6 +39,7 @@ private:
 public:
     WebSnap(QWebPage& page);
     void render(const QString& path = QString::null);
+    QWebPage& page() { return _page; }
 
 public Q_SLOTS:
     void onLoadFinished(bool ok);
