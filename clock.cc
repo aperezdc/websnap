@@ -70,21 +70,9 @@ bool usePosixClock()
         if (posixClockAvailable()) {
             double res_theorical = posixClockTheoricalResolution();
             double res_empirical = posixClockEmpiricalResolution();
-            double res_delta = fabs(res_theorical - res_empirical);
-
-            if (res_delta > CLOCK_MAX_RESOLUTION_DELTA) {
-                std::fprintf(stderr,
-                             "CLOCK_PROCESS_CPUTIME_ID does not work accurately, "
-                             "using fallback\n");
-                useposix = false;
-            }
-            else {
-                useposix = true;
-            }
+            useposix = fabs(res_theorical - res_empirical) <= CLOCK_MAX_RESOLUTION_DELTA;
         }
         else {
-            std::fprintf(stderr,
-                         "CLOCK_PROCESS_CPUTIME_ID not available, using fallback\n");
             useposix = false;
         }
         checked = true;
