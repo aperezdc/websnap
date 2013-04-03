@@ -76,8 +76,8 @@ mkdir -p "${outdir}"
 
 number=0
 while read -r url ; do
-	echo "#${number} - ${url}" 1>&2
 	number=$(( number + 1 ))
+	echo "#${number} - ${url}" 1>&2
 	mkdir -p "${outdir}/${number}"
 
 	echo -n "${number} "
@@ -85,12 +85,12 @@ while read -r url ; do
 	if [ -n "${PROFILE}" ] ; then
 		profilepath="${outdir}/${number}/profile"
 	else
-		profilepath''
+		profilepath=''
 	fi
 
 	exitcode=0
-	busybox timeout -t "${TIMEOUT}" "${mydir}/websnap" \
-		"${url}" "${repeat}" "${profilepath}" \
+	busybox timeout -s KILL -t "${TIMEOUT}" \
+		"${mydir}/websnap" -qws "${url}" "${repeat}" "${profilepath}" \
 		"${outdir}/${number}/out.png" > "${outdir}/${number}/stdout" || exitcode=$?
 
 	if [ "${exitcode}" != 0 ] ; then
