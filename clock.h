@@ -14,17 +14,17 @@
 class Clock
 {
 private:
-    uint64_t _start;
-    uint64_t _end;
+    double _start;
+    double _end;
 
 public:
     Clock(bool autoReset = true);
 
     // Elapsed time since at the moment of the last call to sample(), ns
-    uint64_t elapsed() const { return _end - _start; }
+    double elapsed() const { return _end - _start; }
 
     // Take a sample of the current time, return elapsed time, ns
-    uint64_t sample();
+    double sample();
 
     // Reset the time counter, e.g. set the “starting time”
     void reset();
