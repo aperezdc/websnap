@@ -1,0 +1,105 @@
+#! /bin/sh
+set -e
+
+outdir=$1
+repeat=${2:-50}
+
+#
+# Defaults for environment variables
+#
+: ${PROFILE:=''}
+: ${TIMEOUT:=180}
+
+#
+# Check for '-h' flag, or unset output directory.
+#
+if [ "$1" = "-h" ] || [ -z "$1" ] ; then
+	cat 1>&2 <<-EOF
+	Usage: $0 outdir [repeat] < urllist
+	Arguments:
+
+	  outdir    Directory where to place results [${outdir}]
+	  repeat    Number of times to render web pages [${repeat}]
+
+	Takes a list of URLs in the standard input, and for each URL runs
+	'websnap' on it. Standard output will contain lines in the following
+	form:
+
+	  Number URL Exitcode
+
+	In the output directory, a directory will be created for each URL,
+	being the name the same as the number in the output. Inside the
+	directory, to following files are created:
+
+	  url       URL, as passed as standard input.
+	  repeat    Number of times the rendering was done.
+	  stdout    Standard output of the 'websnap' process.
+	  exitcode  Numeric exit code; 143 for timed out processes.
+	  out.png   Image of the rendered website.
+	  profile   Profile data, when PROFILE is set (see below).
+
+	Environment variables are *not* cleared, so it is possible to
+	use them to pass down options to 'websnap', or configure additional
+	settings. The following variables are taken into account:
+
+	  PROFILE   Path to a shared library that is preloaded to do
+	            profiling. Intended to be used with libprofiler.so
+	            from gperftools.
+	  TIMEOUT   Number of seconds wait for 'websnap' to complete.
+	            If running time reaches the timeout, the process is
+	            killed and the exit code will be 143 [${TIMEOUT}]
+
+	EOF
+	exit 0
+fi
+
+#
+# Set ${mydir} to the *full path* where this script is stored.
+#
+olddir=$(pwd)
+mydir=$(dirname "$0")
+cd "${mydir}"
+mydir=$(pwd)
+cd "${olddir}"
+
+#
+# Set LD_PRELOAD when loading the profiling library is requested.
+#
+if [ -n "${PROFILE}" ] && [ -r "${PROFILE}" ] ; then
+	export LD_PRELOAD=${PROFILE}
+fi
+
+#
+# Iterate over all the URLs from the standard input
+#
+mkdir -p "${outdir}"
+
+number=0
+while read -r url ; do
+	echo "#${number} - ${url}" 1>&2
+	number=$(( number + 1 ))
+	mkdir -p "${outdir}/${number}"
+
+	echo -n "${number} "
+
+	if [ -n "${PROFILE}" ] ; then
+		profilepath="${outdir}/${number}/profile"
+	else
+		profilepath''
+	fi
+
+	exitcode=0
+	busybox timeout -t "${TIMEOUT}" "${mydir}/websnap" \
+		"${url}" "${repeat}" "${profilepath}" \
+		"${outdir}/${number}/out.png" > "${outdir}/${number}/stdout" || exitcode=$?
+
+	if [ "${exitcode}" != 0 ] ; then
+		echo "failed ${exitcode}"
+	fi
+
+	echo "${url}"      > "${outdir}/${number}/url"
+	echo "${repeat}"   > "${outdir}/${number}/repeat"
+	echo "${exitcode}" > "${outdir}/${number}/exitcode"
+done | tee "${outdir}/stdout"
+
+
