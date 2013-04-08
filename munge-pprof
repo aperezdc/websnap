@@ -1,0 +1,68 @@
+#! /usr/bin/env python3
+# -*- coding: utf-8 -*-
+# vim:fenc=utf-8
+#
+# Copyright © 2013 Adrian Perez <aperez@igalia.com>
+#
+# Distributed under terms of the MIT license.
+
+from os import path
+import sys
+
+
+class LazyPathIndex(object):
+    def __init__(self, paths):
+        self._paths = paths
+        self._index = {}
+
+    def __call__(self, filename):
+        fullpath = self._index.get(filename)
+        if fullpath is None:
+            for p in self._paths:
+                trypath = path.join(p, filename)
+                if path.isfile(trypath):
+                    self._index[filename] = fullpath = trypath
+                    break
+        return fullpath
+
+
+def adjust_paths(ifile, ofile, paths):
+    path_of = LazyPathIndex(paths)
+
+    for line in ifile.readlines():
+        parts = str(line).split()
+        if len(parts) == 6 and parts[-1].startswith("/"):
+            # Got a path, search for the file and write modified line
+            filename = parts[-1][:-3]
+            newpath = path_of(path.basename(filename))
+            if newpath is None:
+                # New path not found, leave original one and write a warning
+                sys.stderr.write("File '{}' not found in pathlist\n"
+                                 .format(path.basename(filename)))
+                ofile.write(line)
+            else:
+                # New path found, update. First, write the line as-is
+                # without the original path, then write the new path
+                # and a newline character
+                ofile.write(line[:-(1 + len(filename))])
+                ofile.write(bytes(newpath + "\n", "ascii"))
+        else:
+            # No path in line, just write the original data
+            ofile.write(line)
+
+
+if __name__ == "__main__":
+    if "-h" in sys.argv or len(sys.argv) < 2:
+        raise SystemExit("Usage: {} path1 [path2 ... [pathN] < input > output\n"
+                         "\n"
+                         "  pathN   Paths to directories where to search for libraries.\n"
+                         "  input   Profile data in gperftools' pprof format\n"
+                         "  output  Profile data in gperftools' pprof format\n"
+                         "\n"
+                         "Corrects the paths to libraries in a gperftools' CPU\n"
+                         "profile data file.\n".format(sys.argv[0]))
+
+    # Detach the buffering and text converters from stdin/stdout
+    sys.stdin, sys.stdout = sys.stdin.detach(), sys.stdout.detach()
+    adjust_paths(sys.stdin, sys.stdout, frozenset(sys.argv[1:]))
+
